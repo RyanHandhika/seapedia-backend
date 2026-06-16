@@ -34,4 +34,18 @@ const login = async (
   }
 };
 
+const getMe = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const currentUser = await authServices.getMe();
+
+    res.status(200).json(currentUser);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default { register, login };
