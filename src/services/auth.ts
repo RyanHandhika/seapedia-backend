@@ -38,7 +38,7 @@ async function register(input: RegisterInput) {
     username: input.username,
     email: input.email,
     passwordHash,
-    roles: [Role.BUYER], // always BUYER on registration
+    roles: [Role.BUYER],
   });
 
   return toSafeUser(user);
