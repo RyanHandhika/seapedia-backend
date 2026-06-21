@@ -18,16 +18,14 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 
 export const update = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw AppError.unauthorized();
-  const result = await addressService.update(
-    req.user.id,
-    req.params.id,
-    req.body,
-  );
+  const { id } = req.params as { id: string };
+  const result = await addressService.update(req.user.id, id, req.body);
   return sendSuccess(res, result);
 });
 
 export const remove = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw AppError.unauthorized();
-  const result = await addressService.remove(req.user.id, req.params.id);
+  const { id } = req.params as { id: string };
+  const result = await addressService.remove(req.user.id, id);
   return sendSuccess(res, result);
 });

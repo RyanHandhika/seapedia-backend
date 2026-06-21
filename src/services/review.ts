@@ -25,7 +25,9 @@ async function submitReview(input: SubmitReviewInput) {
     reviewerName: safeReviewerName,
     rating: input.rating,
     comment: safeComment,
-    userId: input.userId,
+    ...(input.userId !== undefined && {
+      userId: input.userId,
+    }),
   });
 }
 
