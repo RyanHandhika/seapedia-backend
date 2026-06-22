@@ -126,9 +126,14 @@ PPN (12%) is applied on the net amount after discount and delivery fee.
     { name: "Buyer — Address" },
     { name: "Buyer — Cart" },
     { name: "Buyer — Checkout & Orders" },
+    { name: "Buyer — Discounts" },
     { name: "Seller — Store" },
     { name: "Seller — Products" },
     { name: "Seller — Orders" },
+    { name: "Admin — Monitoring" },
+    { name: "Admin — Vouchers" },
+    { name: "Admin — Promos" },
+    { name: "Admin — System" },
   ],
   paths: {
     // ── Health ──────────────────────────────────────────────────────────────
@@ -1421,6 +1426,345 @@ Initial order status: **SEDANG_DIKEMAS**
             properties: {
               totalIncome: { type: "number" },
               totalOrders: { type: "integer" },
+            },
+          }),
+        },
+      },
+    },
+
+    // ── Level 4: Discounts ──────────────────────────────────────────────────
+    "/buyer/discounts/validate": {
+      get: {
+        tags: ["Buyer — Discounts"],
+        summary: "Validate discount code before checkout",
+        description:
+          "Shows the discount amount in real-time as the buyer types the code.",
+        security: BearerAuth,
+        parameters: [
+          {
+            name: "code",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+            example: "SAVE10",
+          },
+          {
+            name: "subtotal",
+            in: "query",
+            required: true,
+            schema: { type: "number" },
+            example: 350000,
+          },
+        ],
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              valid: { type: "boolean" },
+              type: {
+                type: "string",
+                enum: ["VOUCHER", "PROMO"],
+                nullable: true,
+              },
+              discountType: {
+                type: "string",
+                enum: ["PERCENT", "FIXED"],
+                nullable: true,
+              },
+              value: { type: "number", nullable: true },
+              discountAmount: { type: "number", nullable: true },
+              reason: {
+                type: "string",
+                nullable: true,
+                description: "Why it failed (when valid=false)",
+              },
+            },
+          }),
+        },
+      },
+    },
+
+    // ── Level 4: Admin — Monitoring ─────────────────────────────────────────
+    "/admin/dashboard": {
+      get: {
+        tags: ["Admin — Monitoring"],
+        summary: "Dashboard summary (counts for all entities)",
+        security: BearerAuth,
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              users: { type: "integer" },
+              stores: { type: "integer" },
+              products: { type: "integer" },
+              orders: { type: "integer" },
+              vouchers: { type: "integer" },
+              promos: { type: "integer" },
+              deliveryJobs: { type: "integer" },
+              overdueOrders: { type: "integer" },
+              simulatedDate: { type: "string", format: "date-time" },
+            },
+          }),
+          "403": ErrorResponse("Admin only"),
+        },
+      },
+    },
+
+    "/admin/users": {
+      get: {
+        tags: ["Admin — Monitoring"],
+        summary: "List all users",
+        security: BearerAuth,
+        parameters: [PageParam, LimitParam],
+        responses: { "200": SuccessResponse({ type: "object" }) },
+      },
+    },
+
+    "/admin/stores": {
+      get: {
+        tags: ["Admin — Monitoring"],
+        summary: "List all stores",
+        security: BearerAuth,
+        parameters: [PageParam, LimitParam],
+        responses: { "200": SuccessResponse({ type: "object" }) },
+      },
+    },
+
+    "/admin/orders": {
+      get: {
+        tags: ["Admin — Monitoring"],
+        summary: "List all orders",
+        security: BearerAuth,
+        parameters: [
+          PageParam,
+          LimitParam,
+          {
+            name: "status",
+            in: "query",
+            schema: {
+              type: "string",
+              enum: [
+                "SEDANG_DIKEMAS",
+                "MENUNGGU_PENGIRIM",
+                "SEDANG_DIKIRIM",
+                "PESANAN_SELESAI",
+                "DIKEMBALIKAN",
+              ],
+            },
+          },
+        ],
+        responses: { "200": SuccessResponse({ type: "object" }) },
+      },
+    },
+
+    "/admin/orders/overdue": {
+      get: {
+        tags: ["Admin — Monitoring"],
+        summary: "List overdue orders",
+        security: BearerAuth,
+        parameters: [PageParam, LimitParam],
+        responses: { "200": SuccessResponse({ type: "object" }) },
+      },
+    },
+
+    "/admin/delivery-jobs": {
+      get: {
+        tags: ["Admin — Monitoring"],
+        summary: "List all delivery jobs",
+        security: BearerAuth,
+        parameters: [PageParam, LimitParam],
+        responses: { "200": SuccessResponse({ type: "object" }) },
+      },
+    },
+
+    // ── Level 4: Admin — Vouchers ───────────────────────────────────────────
+    "/admin/vouchers": {
+      get: {
+        tags: ["Admin — Vouchers"],
+        summary: "List vouchers",
+        security: BearerAuth,
+        parameters: [PageParam, LimitParam],
+        responses: { "200": SuccessResponse({ type: "object" }) },
+      },
+      post: {
+        tags: ["Admin — Vouchers"],
+        summary: "Create a voucher",
+        security: BearerAuth,
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: [
+                  "code",
+                  "discountType",
+                  "value",
+                  "expiryDate",
+                  "usageLimit",
+                ],
+                properties: {
+                  code: { type: "string", example: "SAVE10" },
+                  discountType: {
+                    type: "string",
+                    enum: ["PERCENT", "FIXED"],
+                    example: "PERCENT",
+                  },
+                  value: { type: "number", example: 10 },
+                  expiryDate: {
+                    type: "string",
+                    format: "date",
+                    example: "2025-12-31",
+                  },
+                  usageLimit: { type: "integer", example: 100 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": SuccessResponse({ type: "object" }),
+          "409": ErrorResponse("Code already exists"),
+        },
+      },
+    },
+
+    "/admin/vouchers/{id}": {
+      get: {
+        tags: ["Admin — Vouchers"],
+        summary: "Get voucher detail",
+        security: BearerAuth,
+        parameters: [IdParam("Voucher UUID")],
+        responses: {
+          "200": SuccessResponse({ type: "object" }),
+          "404": ErrorResponse("Not found"),
+        },
+      },
+    },
+
+    // ── Level 4: Admin — Promos ─────────────────────────────────────────────
+    "/admin/promos": {
+      get: {
+        tags: ["Admin — Promos"],
+        summary: "List promos",
+        security: BearerAuth,
+        parameters: [PageParam, LimitParam],
+        responses: { "200": SuccessResponse({ type: "object" }) },
+      },
+      post: {
+        tags: ["Admin — Promos"],
+        summary: "Create a promo",
+        security: BearerAuth,
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["code", "discountType", "value", "expiryDate"],
+                properties: {
+                  code: { type: "string", example: "LEBARAN25" },
+                  discountType: {
+                    type: "string",
+                    enum: ["PERCENT", "FIXED"],
+                    example: "FIXED",
+                  },
+                  value: { type: "number", example: 25000 },
+                  expiryDate: {
+                    type: "string",
+                    format: "date",
+                    example: "2025-04-30",
+                  },
+                  description: {
+                    type: "string",
+                    example: "Promo Lebaran diskon Rp25.000",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": SuccessResponse({ type: "object" }),
+          "409": ErrorResponse("Code already exists"),
+        },
+      },
+    },
+
+    "/admin/promos/{id}": {
+      get: {
+        tags: ["Admin — Promos"],
+        summary: "Get promo detail",
+        security: BearerAuth,
+        parameters: [IdParam("Promo UUID")],
+        responses: {
+          "200": SuccessResponse({ type: "object" }),
+          "404": ErrorResponse("Not found"),
+        },
+      },
+    },
+
+    // ── Level 4: Admin — System / Time Simulation ───────────────────────────
+    "/admin/system/time": {
+      get: {
+        tags: ["Admin — System"],
+        summary: "Get current simulated time",
+        security: BearerAuth,
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              simulatedDate: { type: "string", format: "date-time" },
+              isSimulated: { type: "boolean" },
+            },
+          }),
+        },
+      },
+    },
+
+    "/admin/system/advance-day": {
+      post: {
+        tags: ["Admin — System"],
+        summary: "Advance simulated date by N days",
+        description:
+          "Moves the system clock forward — use for demo to trigger overdue handling.",
+        security: BearerAuth,
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  days: { type: "integer", default: 1, example: 3 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              simulatedDate: { type: "string", format: "date-time" },
+              advancedDays: { type: "integer" },
+            },
+          }),
+        },
+      },
+    },
+
+    "/admin/system/reset-time": {
+      post: {
+        tags: ["Admin — System"],
+        summary: "Reset to real time",
+        security: BearerAuth,
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              simulatedDate: { type: "string", format: "date-time" },
+              isSimulated: { type: "boolean" },
             },
           }),
         },
