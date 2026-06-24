@@ -3,7 +3,6 @@ import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/appError.js";
 import * as orderRepository from "../repositories/order.js";
 import * as storeRepository from "../repositories/store.js";
-import { Prisma } from "../generated/prisma/client.js";
 
 // ── Buyer ────────────────────────────────────────────────────────────────────
 
@@ -86,23 +85,21 @@ async function processOrder(sellerId: string, orderId: string) {
     throw AppError.conflict(`Order is already in status: ${order.status}.`);
   }
 
-  const updated = await prisma.$transaction(
-    async (tx: Prisma.TransactionClient) => {
-      const o = await tx.order.update({
-        where: { id: orderId },
-        data: { status: OrderStatus.MENUNGGU_PENGIRIM },
-      });
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId,
-          status: OrderStatus.MENUNGGU_PENGIRIM,
-          note: "Order processed by seller.",
-        },
-      });
-      await tx.deliveryJob.create({ data: { orderId } });
-      return o;
-    },
-  );
+  const updated = await prisma.$transaction(async (tx) => {
+    const o = await tx.order.update({
+      where: { id: orderId },
+      data: { status: OrderStatus.MENUNGGU_PENGIRIM },
+    });
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId,
+        status: OrderStatus.MENUNGGU_PENGIRIM,
+        note: "Order processed by seller.",
+      },
+    });
+    await tx.deliveryJob.create({ data: { orderId } });
+    return o;
+  });
 
   return updated;
 }

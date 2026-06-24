@@ -1,5 +1,6 @@
 import { AppError } from "../utils/appError.js";
 import { toNumber } from "../utils/money.js";
+import { prisma } from "../db/prisma.js";
 import * as cartRepository from "../repositories/cart.js";
 import * as productRepository from "../repositories/product.js";
 
@@ -91,7 +92,6 @@ async function removeItem(buyerId: string, productId: string) {
 
 async function clearCart(buyerId: string) {
   const cart = await requireCart(buyerId);
-  const { prisma } = await import("../db/prisma.js");
   await cartRepository.clearCart(prisma, cart.id);
   return { message: "Cart cleared." };
 }

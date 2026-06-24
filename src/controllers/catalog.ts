@@ -2,71 +2,49 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendSuccess } from "../utils/apiResponse.js";
 import { catalogService } from "../services/catalog.js";
-import { AppError } from "../utils/appError.js";
 
 export const listProducts = asyncHandler(
   async (req: Request, res: Response) => {
-    const { page, limit, search, storeId, minPrice, maxPrice } =
-      req.query as unknown as {
-        page: number;
-        limit: number;
-        search?: string;
-        storeId?: string;
-        minPrice?: number;
-        maxPrice?: number;
-      };
-    const params: {
-      page: number;
-      limit: number;
-      search?: string;
-      storeId?: string;
-      minPrice?: number;
-      maxPrice?: number;
-    } = {
+    const page = Number(req.query.page ?? 1);
+    const limit = Number(req.query.limit ?? 10);
+
+    const search =
+      typeof req.query.search === "string" ? req.query.search : undefined;
+
+    const storeId =
+      typeof req.query.storeId === "string" ? req.query.storeId : undefined;
+
+    const minPrice =
+      typeof req.query.minPrice === "string"
+        ? Number(req.query.minPrice)
+        : undefined;
+
+    const maxPrice =
+      typeof req.query.maxPrice === "string"
+        ? Number(req.query.maxPrice)
+        : undefined;
+
+    const result = await catalogService.listProducts({
       page,
       limit,
-    };
+      ...(search !== undefined ? { search } : {}),
+      ...(storeId !== undefined ? { storeId } : {}),
+      ...(minPrice !== undefined ? { minPrice } : {}),
+      ...(maxPrice !== undefined ? { maxPrice } : {}),
+    });
 
-    if (search !== undefined) {
-      params.search = search;
-    }
-
-    if (storeId !== undefined) {
-      params.storeId = storeId;
-    }
-
-    if (minPrice !== undefined) {
-      params.minPrice = minPrice;
-    }
-
-    if (maxPrice !== undefined) {
-      params.maxPrice = maxPrice;
-    }
-
-    const result = await catalogService.listProducts(params);
+    return sendSuccess(res, result);
   },
 );
 
-export const getProduct = asyncHandler(async (req, res) => {
-  const id = req.params.id;
-
-  if (typeof id !== "string") {
-    throw AppError.badRequest("Invalid product id");
-  }
-
-  const product = await catalogService.getProduct(id);
+export const getProduct = asyncHandler(async (req: Request, res: Response) => {
+  const product = await catalogService.getProduct(req.params.id as string);
 
   return sendSuccess(res, product);
 });
 
-export const getStore = asyncHandler(async (req, res) => {
-  const id = req.params.id;
-
-  if (typeof id !== "string") {
-    throw AppError.badRequest("Invalid store id");
-  }
-
-  const result = await catalogService.getStore(id);
+export const getStore = asyncHandler(async (req: Request, res: Response) => {
+  const result = await catalogService.getStore(req.params.id as string);
 
   return sendSuccess(res, result);
 });

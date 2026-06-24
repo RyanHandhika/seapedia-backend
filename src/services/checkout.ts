@@ -15,7 +15,6 @@ import {
 import * as cartRepository from "../repositories/cart.js";
 import * as walletRepository from "../repositories/wallet.js";
 import * as addressRepository from "../repositories/address.js";
-import { Prisma } from "../generated/prisma/client.js";
 
 interface CheckoutInput {
   buyerId: string;
@@ -150,97 +149,95 @@ async function confirm(input: CheckoutInput) {
   // ── The critical transaction ────────────────────────────────────────────────
   // All-or-nothing: stock decrement + wallet deduction + order creation.
   // A failure at any step rolls back everything.
-  const order = await prisma.$transaction(
-    async (tx: Prisma.TransactionClient) => {
-      // 1. Decrement stock for each item (race-safe: conditional update).
-      for (const item of cart.cartItems) {
-        const result = await tx.product.updateMany({
-          where: { id: item.productId, stock: { gte: item.quantity } },
-          data: { stock: { decrement: item.quantity } },
-        });
-        if (result.count === 0) {
-          throw AppError.conflict(
-            `"${item.product.name}" no longer has enough stock. Please update your cart.`,
-          );
-        }
+  const order = await prisma.$transaction(async (tx) => {
+    // 1. Decrement stock for each item (race-safe: conditional update).
+    for (const item of cart.cartItems) {
+      const result = await tx.product.updateMany({
+        where: { id: item.productId, stock: { gte: item.quantity } },
+        data: { stock: { decrement: item.quantity } },
+      });
+      if (result.count === 0) {
+        throw AppError.conflict(
+          `"${item.product.name}" no longer has enough stock. Please update your cart.`,
+        );
       }
+    }
 
-      // 2. Create the Order with all snapshot fields.
-      const newOrder = await tx.order.create({
-        data: {
-          buyerId: input.buyerId,
-          storeId: cart.storeId!,
-          addressId: input.addressId,
-          subtotal: totals.subtotal,
-          discountAmount: totals.discountAmount,
-          discountType: discount.discountType,
-          voucherId: "voucherId" in discount ? discount.voucherId : null,
-          promoId: "promoId" in discount ? discount.promoId : null,
-          deliveryMethod: input.deliveryMethod,
-          deliveryFee: totals.deliveryFee,
-          ppnAmount: totals.ppnAmount,
-          total: totals.total,
-          status: OrderStatus.SEDANG_DIKEMAS,
-          dueAt,
-          statusHistory: {
-            create: {
-              status: OrderStatus.SEDANG_DIKEMAS,
-              note: "Order placed by buyer.",
-            },
+    // 2. Create the Order with all snapshot fields.
+    const newOrder = await tx.order.create({
+      data: {
+        buyerId: input.buyerId,
+        storeId: cart.storeId!,
+        addressId: input.addressId,
+        subtotal: totals.subtotal,
+        discountAmount: totals.discountAmount,
+        discountType: discount.discountType,
+        voucherId: "voucherId" in discount ? discount.voucherId : null,
+        promoId: "promoId" in discount ? discount.promoId : null,
+        deliveryMethod: input.deliveryMethod,
+        deliveryFee: totals.deliveryFee,
+        ppnAmount: totals.ppnAmount,
+        total: totals.total,
+        status: OrderStatus.SEDANG_DIKEMAS,
+        dueAt,
+        statusHistory: {
+          create: {
+            status: OrderStatus.SEDANG_DIKEMAS,
+            note: "Order placed by buyer.",
           },
         },
-      });
+      },
+    });
 
-      // 3. Create OrderItems (price snapshot — future price changes don't affect this order).
-      await tx.orderItem.createMany({
-        data: cart.cartItems.map(
-          (item: {
-            productId: string;
-            quantity: number;
-            product: { price: unknown };
-          }) => ({
-            orderId: newOrder.id,
-            productId: item.productId,
-            quantity: item.quantity,
-            priceAtPurchase: toNumber(item.product.price),
-          }),
-        ),
-      });
+    // 3. Create OrderItems (price snapshot — future price changes don't affect this order).
+    await tx.orderItem.createMany({
+      data: cart.cartItems.map(
+        (item: {
+          productId: string;
+          quantity: number;
+          product: { price: unknown };
+        }) => ({
+          orderId: newOrder.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          priceAtPurchase: toNumber(item.product.price),
+        }),
+      ),
+    });
 
-      // 4. Deduct wallet.
-      await tx.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: { decrement: totals.total },
-          transactions: {
-            create: {
-              type: "PAYMENT",
-              amount: totals.total,
-              description: `Payment for order #${newOrder.id.slice(-8).toUpperCase()}`,
-            },
+    // 4. Deduct wallet.
+    await tx.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        balance: { decrement: totals.total },
+        transactions: {
+          create: {
+            type: "PAYMENT",
+            amount: totals.total,
+            description: `Payment for order #${newOrder.id.slice(-8).toUpperCase()}`,
           },
         },
+      },
+    });
+
+    // 5. Increment voucher used count (if applicable).
+    if (
+      discount.discountType === DiscountType.VOUCHER &&
+      "voucherId" in discount &&
+      discount.voucherId
+    ) {
+      await tx.voucher.update({
+        where: { id: discount.voucherId },
+        data: { usedCount: { increment: 1 } },
       });
+    }
 
-      // 5. Increment voucher used count (if applicable).
-      if (
-        discount.discountType === DiscountType.VOUCHER &&
-        "voucherId" in discount &&
-        discount.voucherId
-      ) {
-        await tx.voucher.update({
-          where: { id: discount.voucherId },
-          data: { usedCount: { increment: 1 } },
-        });
-      }
+    // 6. Clear cart.
+    await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+    await tx.cart.update({ where: { id: cart.id }, data: { storeId: null } });
 
-      // 6. Clear cart.
-      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
-      await tx.cart.update({ where: { id: cart.id }, data: { storeId: null } });
-
-      return newOrder;
-    },
-  );
+    return newOrder;
+  });
 
   return order;
 }

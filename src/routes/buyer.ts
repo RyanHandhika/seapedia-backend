@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authenticate } from "../middlewares/authenticate.js";
 import { requireRole } from "../middlewares/requireRole.js";
 import { validate } from "../middlewares/validate.js";
+import { checkoutLimiter, topupLimiter } from "../middlewares/rateLimiter.js";
 import { topupSchema, walletTxQuerySchema } from "../validators/wallet.js";
 import {
   createAddressSchema,
@@ -15,17 +16,24 @@ import {
   cartProductIdParamSchema,
 } from "../validators/cart.js";
 import { checkoutSchema } from "../validators/checkout.js";
+import { validateDiscountQuerySchema } from "../validators/discount.js";
 import * as walletController from "../controllers/wallet.js";
 import * as addressController from "../controllers/address.js";
 import * as cartController from "../controllers/cart.js";
 import * as checkoutController from "../controllers/checkout.js";
+import * as discountController from "../controllers/discount.js";
 
 const router = Router();
 router.use(authenticate(), requireRole("BUYER"));
 
 // ── Wallet ───────────────────────────────────────────────────────────────────
 router.get("/wallet", walletController.getBalance);
-router.post("/wallet/topup", validate(topupSchema), walletController.topup);
+router.post(
+  "/wallet/topup",
+  topupLimiter,
+  validate(topupSchema),
+  walletController.topup,
+);
 router.get(
   "/wallet/transactions",
   validate(walletTxQuerySchema, "query"),
@@ -73,7 +81,12 @@ router.post(
   validate(checkoutSchema),
   checkoutController.preview,
 );
-router.post("/checkout", validate(checkoutSchema), checkoutController.confirm);
+router.post(
+  "/checkout",
+  checkoutLimiter,
+  validate(checkoutSchema),
+  checkoutController.confirm,
+);
 
 const orderQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -93,5 +106,12 @@ router.get(
   checkoutController.getOrder,
 );
 router.get("/reports/spending", checkoutController.getSpendingReport);
+
+// ── Discount validation (preview before checkout) ─────────────────────────────
+router.get(
+  "/discounts/validate",
+  validate(validateDiscountQuerySchema, "query"),
+  discountController.validateDiscount,
+);
 
 export default router;

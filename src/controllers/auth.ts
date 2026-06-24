@@ -50,6 +50,10 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
 
 export const summary = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw AppError.unauthorized();
-  const result = summaryService.getSummary(req.user.roles, req.user.activeRole);
+  const result = await summaryService.getSummary(
+    req.user.id,
+    req.user.roles,
+    req.user.activeRole,
+  );
   return sendSuccess(res, result);
 });

@@ -11,7 +11,8 @@ export function createReview(input: {
       reviewerName: input.reviewerName,
       rating: input.rating,
       comment: input.comment,
-      ...(input.userId !== undefined && { userId: input.userId }),
+
+      ...(input.userId !== undefined ? { userId: input.userId } : {}),
     },
   });
 }
@@ -25,5 +26,6 @@ export async function listReviews(page: number, limit: number) {
     }),
     prisma.appReview.count(),
   ]);
+
   return { data, total };
 }

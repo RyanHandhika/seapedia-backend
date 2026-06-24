@@ -1,4 +1,5 @@
 import { AppError } from "../utils/appError.js";
+import { sanitizeText, sanitizeRequired } from "../utils/sanitize.js";
 import * as storeRepository from "../repositories/store.js";
 
 async function getMyStore(sellerId: string) {
@@ -18,16 +19,23 @@ async function updateMyStore(
   const store = await storeRepository.findBySellerId(sellerId);
   if (!store) throw AppError.notFound("Store not found.");
 
-  // Check name uniqueness only when the name is actually being changed.
-  if (data.storeName && data.storeName !== store.storeName) {
-    const conflict = await storeRepository.findByStoreName(data.storeName);
+  const cleanName = data.storeName
+    ? sanitizeRequired(data.storeName, "storeName")
+    : undefined;
+  const cleanDesc = sanitizeText(data.description);
+
+  if (cleanName && cleanName !== store.storeName) {
+    const conflict = await storeRepository.findByStoreName(cleanName);
     if (conflict) throw AppError.conflict("That store name is already taken.");
   }
 
-  return storeRepository.updateStore(store.id, data);
+  return storeRepository.updateStore(store.id, {
+    ...(cleanName !== undefined ? { storeName: cleanName } : {}),
+
+    ...(cleanDesc !== undefined ? { description: cleanDesc } : {}),
+  });
 }
 
-// Public: anyone can view a store by its id.
 async function getStoreById(storeId: string) {
   const store = await storeRepository.findById(storeId);
   if (!store) throw AppError.notFound("Store not found.");

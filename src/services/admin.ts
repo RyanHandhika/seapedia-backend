@@ -183,7 +183,16 @@ async function advanceDay(days = 1) {
     update: { value: next.toISOString() },
     create: { key: "SIMULATED_DATE", value: next.toISOString() },
   });
-  return { simulatedDate: next, advancedDays: days };
+
+  // Auto-run overdue check with the new time so the demo shows the effect immediately.
+  const { runOverdueCheck } = await import("../services/overdue.js");
+  const overdueResult = await runOverdueCheck();
+
+  return {
+    simulatedDate: next,
+    advancedDays: days,
+    overdueCheck: overdueResult,
+  };
 }
 
 async function resetTime() {

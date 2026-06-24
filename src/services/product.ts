@@ -7,15 +7,9 @@ import { deleteProductImage } from "../middlewares/upload.js";
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 // Sanitize free-text fields the same way we do for reviews — strip all HTML.
-function sanitize(text: string): string;
-function sanitize(text: undefined): undefined;
 function sanitize(text?: string) {
-  if (text === undefined) return undefined;
-
-  return sanitizeHtml(text, {
-    allowedTags: [],
-    allowedAttributes: {},
-  });
+  if (!text) return text;
+  return sanitizeHtml(text, { allowedTags: [], allowedAttributes: {} });
 }
 
 // Throws 404 if the seller has no store, and returns the store.
@@ -45,20 +39,29 @@ async function createProduct(
 ) {
   const store = await requireSellerStore(sellerId);
 
-  return productRepository.createProduct({
+  const payload: {
+    storeId: string;
+    name: string;
+    description?: string;
+    price: number;
+    stock: number;
+    imageUrl?: string;
+  } = {
     storeId: store.id,
     name: sanitize(input.name)!,
     price: input.price,
     stock: input.stock,
+  };
 
-    ...(input.description !== undefined && {
-      description: sanitize(input.description),
-    }),
+  if (input.description !== undefined) {
+    payload.description = sanitize(input.description) ?? "";
+  }
 
-    ...(input.imageUrl !== undefined && {
-      imageUrl: input.imageUrl,
-    }),
-  });
+  if (input.imageUrl !== undefined) {
+    payload.imageUrl = input.imageUrl;
+  }
+
+  return productRepository.createProduct(payload);
 }
 
 async function listMyProducts(
@@ -99,6 +102,15 @@ async function updateProduct(
     newImageUrl?: string; // resolved from the upload middleware before entering here
   },
 ) {
+  const store = await requireSellerStore(sellerId);
+  const existing = await productRepository.findOwnedById(productId, store.id);
+  if (!existing) throw AppError.notFound("Product not found in your store.");
+
+  // If a new image was uploaded, delete the old one from Supabase (best-effort).
+  if (input.newImageUrl && existing.imageUrl) {
+    await deleteProductImage(existing.imageUrl);
+  }
+
   const updateData: {
     name?: string;
     description?: string;
@@ -107,12 +119,13 @@ async function updateProduct(
     imageUrl?: string;
     isActive?: boolean;
   } = {};
+
   if (input.name !== undefined) {
-    updateData.name = sanitize(input.name)!;
+    updateData.name = sanitize(input.name) ?? "";
   }
 
   if (input.description !== undefined) {
-    updateData.description = sanitize(input.description)!;
+    updateData.description = sanitize(input.description) ?? "";
   }
 
   if (input.price !== undefined) {
@@ -130,14 +143,8 @@ async function updateProduct(
   if (input.newImageUrl !== undefined) {
     updateData.imageUrl = input.newImageUrl;
   }
-  const store = await requireSellerStore(sellerId);
-  const existing = await productRepository.findOwnedById(productId, store.id);
-  if (!existing) throw AppError.notFound("Product not found in your store.");
 
-  // If a new image was uploaded, delete the old one from Supabase (best-effort).
-  if (input.newImageUrl && existing.imageUrl) {
-    await deleteProductImage(existing.imageUrl);
-  }
+  return productRepository.updateProduct(productId, updateData);
 
   return productRepository.updateProduct(productId, updateData);
 }

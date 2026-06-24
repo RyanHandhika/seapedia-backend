@@ -77,5 +77,6 @@ router.get(
 router.get("/system/time", adminController.getTime);
 router.post("/system/advance-day", adminController.advanceDay);
 router.post("/system/reset-time", adminController.resetTime);
+router.post("/system/run-overdue-check", adminController.runOverdueCheck);
 
 export default router;

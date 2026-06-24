@@ -77,27 +77,37 @@ export const spec: OpenAPIV3.Document = {
     description: `
 ## SEAPEDIA — Multi-role marketplace API
 
-**Levels implemented:** 1 (Auth & Reviews) · 2 (Seller & Catalog) · 3 (Buyer Wallet, Cart & Checkout)
+**Levels implemented:** 1 · 2 · 3 · 4 · 5 · 6 · 7 (complete)
 
-### Authentication flow
-1. \`POST /auth/register\` — always creates a **BUYER** account (no role selection)
-2. \`POST /auth/login\` — single-role users get a session immediately; multi-role users receive a \`rolePendingToken\`
-3. \`POST /auth/select-role\` — exchange the \`rolePendingToken\` for a full session with an active role
-4. Use the returned \`accessToken\` as \`Bearer <token>\` on all protected endpoints
-5. \`POST /profile/become-seller\` — upgrade to SELLER (creates store atomically)
-6. \`POST /profile/become-driver\` — upgrade to DRIVER
+### Role flow (Shopee/Tokopedia style)
+1. \`POST /auth/register\` → always **BUYER** (no role selection at signup)
+2. \`POST /auth/login\` → single-role → full session | multi-role → \`rolePendingToken\`
+3. \`POST /auth/select-role\` → exchange \`rolePendingToken\` for full session with active role
+4. \`POST /profile/become-seller\` → grants SELLER + creates Store atomically
+5. \`POST /profile/become-driver\` → grants DRIVER role
+
+### Authorization
+Paste \`Bearer <accessToken>\` in the **Authorize 🔒** button (top right).
+The \`activeRole\` inside the token determines what each endpoint allows.
 
 ### Price formula
 \`total = (subtotal − discountAmount + deliveryFee) × 1.12\`
 
-PPN (12%) is applied on the net amount after discount and delivery fee.
+### Delivery fees & SLA
+| Method | Fee | SLA |
+|--------|-----|-----|
+| INSTANT | Rp 50.000 | 3 hours |
+| NEXT_DAY | Rp 25.000 | 24 hours |
+| REGULAR | Rp 15.000 | 72 hours |
 
-### Delivery fees
-| Method | Fee |
-|--------|-----|
-| INSTANT | Rp 50.000 |
-| NEXT_DAY | Rp 25.000 |
-| REGULAR | Rp 15.000 |
+### Overdue handling
+Orders past their SLA are auto-processed by \`POST /admin/system/run-overdue-check\`
+(also triggered automatically by \`advance-day\`):
+- **INSTANT / NEXT_DAY** → wallet refunded + stock restored
+- **REGULAR** → status set to DIKEMBALIKAN (physical return)
+
+### Driver earnings
+Driver receives **80%** of the order's \`deliveryFee\` per completed job.
     `,
   },
   servers: [
@@ -134,6 +144,7 @@ PPN (12%) is applied on the net amount after discount and delivery fee.
     { name: "Admin — Vouchers" },
     { name: "Admin — Promos" },
     { name: "Admin — System" },
+    { name: "Driver" },
   ],
   paths: {
     // ── Health ──────────────────────────────────────────────────────────────
@@ -1765,6 +1776,211 @@ Initial order status: **SEDANG_DIKEMAS**
             properties: {
               simulatedDate: { type: "string", format: "date-time" },
               isSimulated: { type: "boolean" },
+            },
+          }),
+        },
+      },
+    },
+
+    "/admin/system/run-overdue-check": {
+      post: {
+        tags: ["Admin — System"],
+        summary: "Manually trigger overdue order processing",
+        description:
+          "Scans all active orders past their `dueAt` and applies auto-refund (INSTANT/NEXT_DAY) or auto-return (REGULAR). Called automatically by `advance-day`.",
+        security: BearerAuth,
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              checkedAt: { type: "string", format: "date-time" },
+              processed: { type: "integer" },
+              results: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    orderId: { type: "string" },
+                    action: {
+                      type: "string",
+                      enum: ["REFUNDED", "RETURNED", "ERROR"],
+                    },
+                    reason: { type: "string" },
+                  },
+                },
+              },
+            },
+          }),
+          "403": ErrorResponse("Admin only"),
+        },
+      },
+    },
+
+    // ── Level 5: Driver ──────────────────────────────────────────────────────
+    "/driver/jobs/available": {
+      get: {
+        tags: ["Driver"],
+        summary: "List available delivery jobs",
+        description:
+          "Shows only jobs with status AVAILABLE (Seller has processed the order).",
+        security: BearerAuth,
+        parameters: [PageParam, LimitParam],
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              data: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    status: { type: "string", example: "AVAILABLE" },
+                    order: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string" },
+                        total: { type: "number" },
+                        deliveryFee: { type: "number" },
+                        deliveryMethod: { type: "string" },
+                        store: {
+                          type: "object",
+                          properties: { storeName: { type: "string" } },
+                        },
+                        address: { type: "object" },
+                      },
+                    },
+                  },
+                },
+              },
+              pagination: { $ref: "#/components/schemas/Pagination" },
+            },
+          }),
+          "403": ErrorResponse("Active role must be DRIVER"),
+        },
+      },
+    },
+
+    "/driver/jobs/active": {
+      get: {
+        tags: ["Driver"],
+        summary: "Get currently active job (TAKEN)",
+        security: BearerAuth,
+        responses: {
+          "200": SuccessResponse({ type: "object", nullable: true }),
+          "403": ErrorResponse("Active role must be DRIVER"),
+        },
+      },
+    },
+
+    "/driver/jobs/history": {
+      get: {
+        tags: ["Driver"],
+        summary: "List completed job history",
+        security: BearerAuth,
+        parameters: [PageParam, LimitParam],
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              data: { type: "array", items: { type: "object" } },
+              pagination: { $ref: "#/components/schemas/Pagination" },
+            },
+          }),
+        },
+      },
+    },
+
+    "/driver/jobs/{id}": {
+      get: {
+        tags: ["Driver"],
+        summary: "Get job detail",
+        description: "Only returns the job if status is AVAILABLE.",
+        security: BearerAuth,
+        parameters: [IdParam("Delivery job UUID")],
+        responses: {
+          "200": SuccessResponse({ type: "object" }),
+          "404": ErrorResponse("Job not found"),
+          "409": ErrorResponse("Job no longer available"),
+        },
+      },
+    },
+
+    "/driver/jobs/{id}/take": {
+      post: {
+        tags: ["Driver"],
+        summary: "Take a delivery job",
+        description: `Race-safe: uses a conditional update so two drivers cannot take the same job simultaneously.
+Order status moves to **SEDANG_DIKIRIM**.`,
+        security: BearerAuth,
+        parameters: [IdParam("Delivery job UUID")],
+        responses: {
+          "200": SuccessResponse({ type: "object" }),
+          "409": ErrorResponse("Job already taken or you have an active job"),
+        },
+      },
+    },
+
+    "/driver/jobs/{id}/complete": {
+      post: {
+        tags: ["Driver"],
+        summary: "Mark delivery as completed",
+        description: `Order status moves to **PESANAN_SELESAI**.
+Driver earning (${80}% of deliveryFee) is recorded automatically.`,
+        security: BearerAuth,
+        parameters: [IdParam("Delivery job UUID")],
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              message: { type: "string" },
+              earning: {
+                type: "number",
+                description: "80% of order deliveryFee",
+              },
+              jobId: { type: "string" },
+              orderId: { type: "string" },
+            },
+          }),
+          "403": ErrorResponse("Job not assigned to you"),
+          "409": ErrorResponse("Job is not in TAKEN status"),
+        },
+      },
+    },
+
+    "/driver/earnings": {
+      get: {
+        tags: ["Driver"],
+        summary: "Get driver earnings summary",
+        security: BearerAuth,
+        parameters: [
+          {
+            name: "from",
+            in: "query",
+            schema: { type: "string", format: "date" },
+          },
+          {
+            name: "to",
+            in: "query",
+            schema: { type: "string", format: "date" },
+          },
+        ],
+        responses: {
+          "200": SuccessResponse({
+            type: "object",
+            properties: {
+              totalEarned: { type: "number", example: 120000 },
+              data: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    amount: { type: "number" },
+                    createdAt: { type: "string", format: "date-time" },
+                  },
+                },
+              },
             },
           }),
         },

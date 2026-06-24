@@ -19,10 +19,10 @@ export const addItem = asyncHandler(async (req: Request, res: Response) => {
 
 export const updateItem = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw AppError.unauthorized();
-  const { id } = req.params as { id: string };
+  const { productId } = req.params as { productId: string };
   const result = await cartService.updateItem(
     req.user.id,
-    id,
+    productId,
     req.body.quantity,
   );
   return sendSuccess(res, result);
@@ -30,8 +30,8 @@ export const updateItem = asyncHandler(async (req: Request, res: Response) => {
 
 export const removeItem = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw AppError.unauthorized();
-  const { id } = req.params as { id: string };
-  const result = await cartService.removeItem(req.user.id, id);
+  const { productId } = req.params as { productId: string };
+  const result = await cartService.removeItem(req.user.id, productId);
   return sendSuccess(res, result);
 });
 

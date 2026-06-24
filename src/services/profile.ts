@@ -1,6 +1,7 @@
 import { Role } from "../generated/prisma/client.js";
 import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/appError.js";
+import { sanitizeRequired, sanitizeText } from "../utils/sanitize.js";
 import * as userRepository from "../repositories/user.js";
 
 // ─── Become Seller ───────────────────────────────────────────────────────────
@@ -17,6 +18,9 @@ interface BecomeSellerInput {
 async function becomeSeller(input: BecomeSellerInput) {
   // Idempotency guard — re-opening "Buka Toko" on an already-seller account
   // should show the existing store, not throw an error, so we check first.
+  const cleanName = sanitizeRequired(input.storeName, "storeName");
+  const cleanDesc = sanitizeText(input.description);
+
   const alreadySeller = await userRepository.hasRole(input.userId, Role.SELLER);
   if (alreadySeller) {
     throw AppError.conflict(
@@ -28,7 +32,7 @@ async function becomeSeller(input: BecomeSellerInput) {
   // error message is clear.  The DB unique constraint is the real guard;
   // this check just gives a friendlier error than a Prisma constraint error.
   const nameConflict = await prisma.store.findUnique({
-    where: { storeName: input.storeName },
+    where: { storeName: cleanName },
   });
   if (nameConflict) {
     throw AppError.conflict(
@@ -44,10 +48,8 @@ async function becomeSeller(input: BecomeSellerInput) {
     prisma.store.create({
       data: {
         sellerId: input.userId,
-        storeName: input.storeName,
-        ...(input.description !== undefined && {
-          description: input.description,
-        }),
+        storeName: cleanName,
+        ...(cleanDesc !== undefined ? { description: cleanDesc } : {}),
       },
     }),
   ]);

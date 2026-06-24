@@ -1,8 +1,8 @@
+import { WalletTransactionType } from "../generated/prisma/client.js";
 import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/appError.js";
 import { toNumber } from "../utils/money.js";
 import * as walletRepository from "../repositories/wallet.js";
-import { Prisma } from "../generated/prisma/client.js";
 
 async function requireWallet(buyerId: string) {
   const wallet = await walletRepository.findByBuyerId(buyerId);
@@ -17,15 +17,22 @@ async function getBalance(buyerId: string) {
 
 async function topup(buyerId: string, amount: number) {
   const wallet = await requireWallet(buyerId);
-  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await walletRepository.incrementBalance(
-      tx as typeof prisma,
-      wallet.id,
-      amount,
-    );
+
+  const updated = await prisma.wallet.update({
+    where: { id: wallet.id },
+    data: {
+      balance: { increment: amount },
+      transactions: {
+        create: {
+          type: WalletTransactionType.TOPUP,
+          amount,
+          description: `Top-up Rp ${amount.toLocaleString("id-ID")}`,
+        },
+      },
+    },
   });
-  const updated = await walletRepository.findByBuyerId(buyerId);
-  return { balance: toNumber(updated!.balance) };
+
+  return { balance: toNumber(updated.balance) };
 }
 
 async function listTransactions(buyerId: string, page: number, limit: number) {

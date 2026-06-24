@@ -54,7 +54,6 @@ export const updateProduct = asyncHandler(
 
     const newImageUrl = await uploadProductImage(req);
     const { id } = req.params as { id: string };
-
     const product = await productService.updateProduct(req.user.id, id, {
       ...req.body,
       newImageUrl,
@@ -66,11 +65,8 @@ export const updateProduct = asyncHandler(
 export const deleteProduct = asyncHandler(
   async (req: Request, res: Response) => {
     if (!req.user) throw AppError.unauthorized();
-
     const { id } = req.params as { id: string };
-
     const result = await productService.deleteProduct(req.user.id, id);
-
     return sendSuccess(res, result);
   },
 );
