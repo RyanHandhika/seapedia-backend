@@ -1,13 +1,43 @@
 import { Role } from "../src/generated/prisma/client";
-import { prisma } from "../src/db/prisma";
 import bcrypt from "bcrypt";
+import { prisma } from "../src/db/prisma.js";
 
 const PASSWORD = "Password123!";
+
+async function upsertUserWithResources(data: {
+  username: string;
+  email: string;
+  hash: string;
+  roles: Role[];
+  walletBalance: number;
+}) {
+  const user = await prisma.user.upsert({
+    where: { username: data.username },
+    update: {},
+    create: {
+      username: data.username,
+      email: data.email,
+      passwordHash: data.hash,
+      userRoles: { create: data.roles.map((role) => ({ role })) },
+    },
+  });
+  await prisma.wallet.upsert({
+    where: { buyerId: user.id },
+    update: {},
+    create: { buyerId: user.id, balance: data.walletBalance },
+  });
+  await prisma.cart.upsert({
+    where: { buyerId: user.id },
+    update: {},
+    create: { buyerId: user.id },
+  });
+  return user;
+}
 
 async function main() {
   const hash = await bcrypt.hash(PASSWORD, 12);
 
-  // Admin (seed-only, no wallet/cart needed)
+  // Admin — no wallet/cart needed
   await prisma.user.upsert({
     where: { username: "admin" },
     update: {},
@@ -19,160 +49,153 @@ async function main() {
     },
   });
 
-  // Pure buyer
-  const buyer = await prisma.user.upsert({
-    where: { username: "buyer_demo" },
+  // Buyer only
+  const buyer = await upsertUserWithResources({
+    username: "buyer_demo",
+    email: "buyer@seapedia.test",
+    hash,
+    roles: [Role.BUYER],
+    walletBalance: 1_000_000,
+  });
+  await prisma.address.upsert({
+    where: { id: "a1b2c3d4-0000-0000-0000-000000000001" },
     update: {},
     create: {
-      username: "buyer_demo",
-      email: "buyer@seapedia.test",
-      passwordHash: hash,
-      userRoles: { create: [{ role: Role.BUYER }] },
+      id: "a1b2c3d4-0000-0000-0000-000000000001",
+      buyerId: buyer.id,
+      label: "Rumah",
+      recipientName: "Budi Buyer",
+      phone: "081234567890",
+      fullAddress: "Jl. Sudirman No. 1, Jakarta Pusat 10220",
+      isDefault: true,
     },
   });
-  await prisma.wallet.upsert({
-    where: { buyerId: buyer.id },
-    update: {},
-    create: { buyerId: buyer.id, balance: 500_000 },
-  });
-  await prisma.cart.upsert({
-    where: { buyerId: buyer.id },
-    update: {},
-    create: { buyerId: buyer.id },
-  });
-  await prisma.address
-    .create({
-      data: {
-        buyerId: buyer.id,
-        label: "Rumah",
-        recipientName: "Budi Buyer",
-        phone: "081234567890",
-        fullAddress: "Jl. Sudirman No. 1, Jakarta Pusat",
-        isDefault: true,
-      },
-    })
-    .catch(() => {}); // ignore if already exists
 
-  // Multi-role: Buyer + Seller
-  const seller = await prisma.user.upsert({
-    where: { username: "seller_demo" },
-    update: {},
-    create: {
-      username: "seller_demo",
-      email: "seller@seapedia.test",
-      passwordHash: hash,
-      userRoles: { create: [{ role: Role.BUYER }, { role: Role.SELLER }] },
-    },
+  // Seller + Buyer
+  const seller = await upsertUserWithResources({
+    username: "seller_demo",
+    email: "seller@seapedia.test",
+    hash,
+    roles: [Role.BUYER, Role.SELLER],
+    walletBalance: 500_000,
   });
-  await prisma.wallet.upsert({
-    where: { buyerId: seller.id },
-    update: {},
-    create: { buyerId: seller.id, balance: 1_000_000 },
-  });
-  await prisma.cart.upsert({
-    where: { buyerId: seller.id },
-    update: {},
-    create: { buyerId: seller.id },
-  });
-  await prisma.store.upsert({
+  const store = await prisma.store.upsert({
     where: { sellerId: seller.id },
     update: {},
     create: {
       sellerId: seller.id,
       storeName: "Demo Toko",
-      description: "Seeded demo store",
+      description: "Toko demo SEAPEDIA",
     },
   });
+  await prisma.product.createMany({
+    skipDuplicates: true,
+    data: [
+      {
+        storeId: store.id,
+        name: "Kemeja Polos Pria",
+        price: 89_000,
+        stock: 50,
+      },
+      { storeId: store.id, name: "Celana Chino", price: 150_000, stock: 30 },
+      { storeId: store.id, name: "Sepatu Sneakers", price: 350_000, stock: 20 },
+    ],
+  });
 
-  // Multi-role: Buyer + Driver
-  const driver = await prisma.user.upsert({
-    where: { username: "driver_demo" },
+  // Driver + Buyer
+  await upsertUserWithResources({
+    username: "driver_demo",
+    email: "driver@seapedia.test",
+    hash,
+    roles: [Role.BUYER, Role.DRIVER],
+    walletBalance: 0,
+  });
+
+  // Discount codes for testing
+  const future = new Date("2027-12-31");
+  await prisma.voucher.upsert({
+    where: { code: "SAVE10" },
     update: {},
     create: {
-      username: "driver_demo",
-      email: "driver@seapedia.test",
-      passwordHash: hash,
-      userRoles: { create: [{ role: Role.BUYER }, { role: Role.DRIVER }] },
+      code: "SAVE10",
+      discountType: "PERCENT",
+      value: 10,
+      expiryDate: future,
+      usageLimit: 100,
     },
   });
-  await prisma.wallet.upsert({
-    where: { buyerId: driver.id },
+  await prisma.voucher.upsert({
+    where: { code: "FLAT25K" },
     update: {},
-    create: { buyerId: driver.id, balance: 0 },
+    create: {
+      code: "FLAT25K",
+      discountType: "FIXED",
+      value: 25_000,
+      expiryDate: future,
+      usageLimit: 50,
+    },
   });
-  await prisma.cart.upsert({
-    where: { buyerId: driver.id },
+  await prisma.promo.upsert({
+    where: { code: "PROMO15" },
     update: {},
-    create: { buyerId: driver.id },
+    create: {
+      code: "PROMO15",
+      discountType: "PERCENT",
+      value: 15,
+      expiryDate: future,
+      description: "Promo 15% untuk semua produk",
+    },
   });
 
-  // Seed some demo products
-  const demoStore = await prisma.store.findUnique({
-    where: { sellerId: seller.id },
-  });
-  if (demoStore) {
-    await prisma.product.createMany({
-      skipDuplicates: true,
-      data: [
-        {
-          storeId: demoStore.id,
-          name: "Kemeja Polos Pria",
-          description: "Tersedia berbagai warna",
-          price: 89_000,
-          stock: 50,
-        },
-        {
-          storeId: demoStore.id,
-          name: "Celana Chino",
-          description: "Bahan premium nyaman dipakai",
-          price: 150_000,
-          stock: 30,
-        },
-        {
-          storeId: demoStore.id,
-          name: "Sepatu Sneakers",
-          description: "Ringan dan stylish",
-          price: 350_000,
-          stock: 20,
-        },
-      ],
-    });
-  }
-
+  // App reviews
   await prisma.appReview.createMany({
     skipDuplicates: true,
     data: [
-      { reviewerName: "Sari", rating: 5, comment: "Belanja mudah dan cepat!" },
+      {
+        reviewerName: "Sari",
+        rating: 5,
+        comment: "Marketplace yang sangat mudah digunakan!",
+      },
       {
         reviewerName: "Budi",
         rating: 4,
-        comment: "Pilihan produk semakin banyak.",
+        comment: "Pilihan produk semakin banyak, bagus!",
       },
     ],
   });
 
-  console.log("\nSeed complete. All accounts use password: Password123!\n");
+  console.log(
+    "\n✅ Seed selesai. Semua akun menggunakan password: Password123!\n",
+  );
   console.table([
-    { username: "admin", roles: "ADMIN", wallet: "-", note: "Admin only" },
+    {
+      username: "admin",
+      roles: "ADMIN",
+      wallet: "-",
+      note: "Login langsung, tanpa pilih role",
+    },
     {
       username: "buyer_demo",
       roles: "BUYER",
-      wallet: "Rp 500k",
-      note: "Single-role login",
+      wallet: "Rp 1jt",
+      note: "Login langsung, 1 alamat tersedia",
     },
     {
       username: "seller_demo",
       roles: "BUYER + SELLER",
-      wallet: "Rp 1jt",
-      note: "Role selection on login",
+      wallet: "Rp 500k",
+      note: "Pilih role saat login, ada 3 produk",
     },
     {
       username: "driver_demo",
       roles: "BUYER + DRIVER",
       wallet: "Rp 0",
-      note: "Role selection on login",
+      note: "Pilih role saat login",
     },
   ]);
+  console.log(
+    "Discount codes: SAVE10 (10%), FLAT25K (Rp25rb), PROMO15 (15%)\n",
+  );
 }
 
 main()
@@ -180,6 +203,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(() => prisma.$disconnect());

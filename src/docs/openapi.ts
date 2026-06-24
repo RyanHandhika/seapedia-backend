@@ -79,11 +79,15 @@ export const spec: OpenAPIV3.Document = {
 
 **Levels implemented:** 1 · 2 · 3 · 4 · 5 · 6 · 7 (complete)
 
-### Role flow (Shopee/Tokopedia style)
+### Role flow
 1. \`POST /auth/register\` → always **BUYER** (no role selection at signup)
+
 2. \`POST /auth/login\` → single-role → full session | multi-role → \`rolePendingToken\`
+
 3. \`POST /auth/select-role\` → exchange \`rolePendingToken\` for full session with active role
+
 4. \`POST /profile/become-seller\` → grants SELLER + creates Store atomically
+
 5. \`POST /profile/become-driver\` → grants DRIVER role
 
 ### Authorization

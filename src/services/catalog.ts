@@ -1,7 +1,6 @@
 import { AppError } from "../utils/appError.js";
 import * as productRepository from "../repositories/product.js";
 import * as storeRepository from "../repositories/store.js";
-import * as productRepoFull from "../repositories/product.js";
 
 async function listProducts(opts: {
   page: number;
@@ -33,8 +32,7 @@ async function getStore(storeId: string) {
   const store = await storeRepository.findById(storeId);
   if (!store) throw AppError.notFound("Store not found.");
 
-  // Show only active, in-stock products on the public store page.
-  const { data: products } = await productRepoFull.listPublic({
+  const { data: products } = await productRepository.listPublic({
     page: 1,
     limit: 20,
     storeId,
