@@ -1,5 +1,5 @@
 # ── Build stage ──
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 
 # Prisma & beberapa lib butuh openssl
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
@@ -20,7 +20,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # ── Runtime stage ──
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
