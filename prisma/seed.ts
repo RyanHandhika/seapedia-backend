@@ -263,11 +263,31 @@ async function main() {
         reviewerName: "Sari",
         rating: 5,
         comment: "Marketplace yang sangat mudah digunakan!",
+        reviewerRole: "BUYER",
       },
       {
         reviewerName: "Budi",
         rating: 4,
         comment: "Pilihan produk semakin banyak, bagus!",
+        reviewerRole: "SELLER",
+      },
+      {
+        reviewerName: "Sarah",
+        rating: 4,
+        comment: "Menu penambahan produk nya sangat mudah!",
+        reviewerRole: "SELLER",
+      },
+      {
+        reviewerName: "Bayu",
+        rating: 4,
+        comment: "Mantapp bisa melihat list pesanan yang sudah kita antar!",
+        reviewerRole: "DRIVER",
+      },
+      {
+        reviewerName: "Ilham",
+        rating: 4,
+        comment: "BANYAKK DISKONN NYA MANTAPP!",
+        reviewerRole: "BUYER",
       },
     ],
   });

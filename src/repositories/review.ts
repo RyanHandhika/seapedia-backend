@@ -1,18 +1,22 @@
 import { prisma } from "../db/prisma.js";
+import type { Role } from "../generated/prisma/client.js";
 
 export function createReview(input: {
   reviewerName: string;
   rating: number;
   comment: string;
   userId?: string;
+  reviewerRole?: Role;
 }) {
   return prisma.appReview.create({
     data: {
       reviewerName: input.reviewerName,
       rating: input.rating,
       comment: input.comment,
-
       ...(input.userId !== undefined ? { userId: input.userId } : {}),
+      ...(input.reviewerRole !== undefined
+        ? { reviewerRole: input.reviewerRole }
+        : {}),
     },
   });
 }
