@@ -19,6 +19,17 @@ export function errorHandler(
     });
   }
 
+  if (
+    err instanceof SyntaxError &&
+    "body" in (err as SyntaxError & { body?: unknown })
+  ) {
+    return res.status(400).json({
+      success: false,
+      code: "INVALID_JSON",
+      message: "Request body is not valid JSON.",
+    });
+  }
+
   console.error("Unexpected error:", err);
   return res.status(500).json({
     success: false,

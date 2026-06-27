@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { Role } from "../generated/prisma/client.js";
+import { prisma } from "../db/prisma.js";
 import { env } from "../config/env.js";
 import { AppError } from "../utils/appError.js";
 import { hashPassword, comparePassword } from "../utils/password.js";
@@ -34,11 +35,22 @@ async function register(input: RegisterInput) {
   }
 
   const passwordHash = await hashPassword(input.password);
-  const user = await userRepository.createUserWithRoles({
-    username: input.username,
-    email: input.email,
-    passwordHash,
-    roles: [Role.BUYER], // always BUYER on registration
+
+  // Create user, wallet, and cart in one transaction.
+  // Every account starts as BUYER and needs both resources immediately.
+  const user = await prisma.$transaction(async (tx) => {
+    const newUser = await tx.user.create({
+      data: {
+        username: input.username,
+        email: input.email,
+        passwordHash,
+        userRoles: { create: [{ role: Role.BUYER }] },
+      },
+      include: { userRoles: true },
+    });
+    await tx.wallet.create({ data: { buyerId: newUser.id, balance: 0 } });
+    await tx.cart.create({ data: { buyerId: newUser.id } });
+    return newUser;
   });
 
   return toSafeUser(user);
@@ -69,8 +81,8 @@ async function login(input: LoginInput) {
   // Admin is single-role by design; same for any user who only owns one
   // non-admin role — neither needs the role-selection handshake.
   if (roles.includes(Role.ADMIN) || roles.length === 1) {
-    const activeRole = roles.includes(Role.ADMIN) ? Role.ADMIN : roles[0];
-    const session = await issueFullSession(user.id, roles, activeRole!);
+    const activeRole = roles.includes(Role.ADMIN) ? Role.ADMIN : roles[0]!;
+    const session = await issueFullSession(user.id, roles, activeRole);
     return { requiresRoleSelection: false, roles, ...session };
   }
 

@@ -1,16 +1,15 @@
 import sanitizeHtml from "sanitize-html";
 import * as reviewRepository from "../repositories/review.js";
+import type { Role } from "../generated/prisma/client.js";
 
 interface SubmitReviewInput {
   reviewerName: string;
   rating: number;
   comment: string;
   userId?: string;
+  reviewerRole?: Role;
 }
 
-// Baseline sanitization now (strip all HTML tags/attributes); the full
-// XSS hardening pass with dedicated test cases is Level 7, but this is
-// essentially free to do here and avoids storing raw markup at all.
 async function submitReview(input: SubmitReviewInput) {
   const safeComment = sanitizeHtml(input.comment, {
     allowedTags: [],
@@ -25,7 +24,10 @@ async function submitReview(input: SubmitReviewInput) {
     reviewerName: safeReviewerName,
     rating: input.rating,
     comment: safeComment,
-    userId: input.userId,
+    ...(input.userId !== undefined ? { userId: input.userId } : {}),
+    ...(input.reviewerRole !== undefined
+      ? { reviewerRole: input.reviewerRole }
+      : {}),
   });
 }
 

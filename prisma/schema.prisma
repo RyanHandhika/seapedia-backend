@@ -152,6 +152,7 @@ model Product {
 model AppReview {
   id           String   @id @default(uuid())
   reviewerName String   @map("reviewer_name")
+  reviewerRole Role?    @map("reviewer_role")
   rating       Int
   comment      String
   userId       String?  @map("user_id")
