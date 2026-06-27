@@ -10,10 +10,11 @@ import { errorHandler } from "./middlewares/errorHandler.js";
 
 const app = express();
 
-app.use("/api/docs", helmet({ contentSecurityPolicy: false }));
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(morgan("dev"));
 
 app.use(
   "/api/docs",
@@ -29,14 +30,8 @@ app.use(
     },
   }),
 );
-
 app.get("/api/docs/swagger.json", (_req, res) => res.json(spec));
 
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(morgan("dev"));
 app.use("/api", mainRoutes);
 app.use(errorHandler);
 

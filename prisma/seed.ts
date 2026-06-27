@@ -88,17 +88,125 @@ async function main() {
       description: "Toko demo SEAPEDIA",
     },
   });
+
+  // Products — wipe this store's products first so re-seeding stays idempotent
+  // (Product has no unique name constraint, so createMany would otherwise pile
+  // up duplicates on every run).
+  await prisma.product.deleteMany({ where: { storeId: store.id } });
   await prisma.product.createMany({
-    skipDuplicates: true,
     data: [
       {
         storeId: store.id,
         name: "Kemeja Polos Pria",
+        description: "Kemeja katun lengan panjang, nyaman dipakai harian.",
         price: 89_000,
         stock: 50,
       },
-      { storeId: store.id, name: "Celana Chino", price: 150_000, stock: 30 },
-      { storeId: store.id, name: "Sepatu Sneakers", price: 350_000, stock: 20 },
+      {
+        storeId: store.id,
+        name: "Celana Chino Slim Fit",
+        description: "Celana chino bahan stretch, tersedia banyak warna.",
+        price: 150_000,
+        stock: 30,
+      },
+      {
+        storeId: store.id,
+        name: "Sepatu Sneakers Putih",
+        description: "Sneakers kasual, cocok untuk berbagai gaya.",
+        price: 350_000,
+        stock: 20,
+      },
+      {
+        storeId: store.id,
+        name: "Kaos Oversize Unisex",
+        description: "Kaos cotton combed 24s, potongan oversize kekinian.",
+        price: 65_000,
+        stock: 80,
+      },
+      {
+        storeId: store.id,
+        name: "Jaket Hoodie Fleece",
+        description: "Hoodie tebal berbahan fleece, hangat dan lembut.",
+        price: 220_000,
+        stock: 25,
+      },
+      {
+        storeId: store.id,
+        name: "Topi Baseball Classic",
+        description: "Topi adjustable dengan bordir minimalis.",
+        price: 55_000,
+        stock: 100,
+      },
+      {
+        storeId: store.id,
+        name: "Tas Ransel Daypack",
+        description: "Ransel 20L tahan air, banyak kompartemen.",
+        price: 180_000,
+        stock: 40,
+      },
+      {
+        storeId: store.id,
+        name: "Dompet Kulit Pria",
+        description: "Dompet kulit sintetis premium, slim design.",
+        price: 95_000,
+        stock: 60,
+      },
+      {
+        storeId: store.id,
+        name: "Kemeja Flanel Kotak",
+        description: "Flanel motif kotak, bahan adem dan tidak panas.",
+        price: 120_000,
+        stock: 35,
+      },
+      {
+        storeId: store.id,
+        name: "Celana Jeans Reguler",
+        description: "Jeans denim klasik potongan reguler.",
+        price: 175_000,
+        stock: 28,
+      },
+      {
+        storeId: store.id,
+        name: "Sandal Slide Casual",
+        description: "Sandal empuk untuk santai di rumah maupun jalan.",
+        price: 45_000,
+        stock: 120,
+      },
+      {
+        storeId: store.id,
+        name: "Sweater Rajut Polos",
+        description: "Sweater rajut halus, cocok untuk cuaca dingin.",
+        price: 160_000,
+        stock: 22,
+      },
+      {
+        storeId: store.id,
+        name: "Kacamata Hitam UV400",
+        description: "Kacamata anti UV dengan frame ringan.",
+        price: 85_000,
+        stock: 70,
+      },
+      {
+        storeId: store.id,
+        name: "Ikat Pinggang Kulit",
+        description: "Sabuk kulit dengan gesper logam anti karat.",
+        price: 70_000,
+        stock: 65,
+      },
+      {
+        storeId: store.id,
+        name: "Kaos Kaki Sport (3 Pasang)",
+        description: "Paket 3 pasang kaos kaki olahraga anti bau.",
+        price: 40_000,
+        stock: 150,
+      },
+      {
+        storeId: store.id,
+        name: "Jam Tangan Analog Minimalis",
+        description: "Jam tangan strap kulit, desain bersih dan elegan.",
+        price: 290_000,
+        stock: 18,
+      },
     ],
   });
 
@@ -184,7 +292,7 @@ async function main() {
       username: "seller_demo",
       roles: "BUYER + SELLER",
       wallet: "Rp 500k",
-      note: "Pilih role saat login, ada 3 produk",
+      note: "Pilih role saat login, ada 16 produk",
     },
     {
       username: "driver_demo",
