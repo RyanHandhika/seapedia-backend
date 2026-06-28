@@ -79,6 +79,8 @@ export async function getEarnings(driverId: string, from?: Date, to?: Date) {
   ]);
   return {
     data: earnings,
+    total: parseFloat(String(total._sum.amount ?? 0)),
+    count: earnings.length,
     totalEarned: parseFloat(String(total._sum.amount ?? 0)),
   };
 }
