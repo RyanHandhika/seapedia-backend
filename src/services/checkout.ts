@@ -137,8 +137,7 @@ async function confirm(input: CheckoutInput) {
 
   if (toNumber(wallet.balance) < totals.total) {
     throw AppError.conflict(
-      `Insufficient wallet balance. Your balance: Rp ${toNumber(wallet.balance).toLocaleString("id-ID")}, ` +
-        `required: Rp ${totals.total.toLocaleString("id-ID")}.`,
+      "Your wallet balance is too low. Please add more funds and try again.",
     );
   }
 
